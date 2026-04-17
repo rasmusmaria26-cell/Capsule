@@ -1,0 +1,189 @@
+Chowa StyleBot
+Product Requirements Document  ·  MVP
+Working Title  ·  Confidential
+
+1. Project Overview &amp; Philosophy
+Product Name: Chowa StyleBot (Working Title)
+
+Objective: An intelligent styling application that organically digitizes a user&apos;s wardrobe through daily use, generating occasion-appropriate outfits ranked by structural Japanese color harmony (Shikisai Chowa) calculated in the OKLCH color space.
+
+Core Philosophy
+Value first, digitization second. The app must provide actionable styling utility from day one with minimal user input, solving daily outfit friction rather than acting as a static inventory chore.
+
+2. Target Audience
+Professionals and students experiencing &quot;wardrobe fatigue&quot; who want algorithmic assistance to look well-put-together.
+Users who struggle with color theory and coordination.
+Sustainable fashion advocates looking to maximize their existing closet utility.
+
+3. User Flow &amp; Core Loops
+3.1 Purpose-Driven Onboarding
+The Chowa Profile Quiz
+Users complete a brief functional quiz outputting a default Chowa Profile parameter for the ranking engine.
+Profiles: Tonal Minimalist, High-Contrast, or Neutral-Anchored.
+The 3-Item Seed
+Users snap a photo of what they are wearing right now, plus one favorite jacket or pair of shoes.
+Immediate Payoff
+The app instantly outputs a styling tip, a missing piece recommendation, or an alternate color pairing based on their seed items and Chowa profile.
+
+3.2 Daily Interaction (Incremental Digitization)
+The Daily Hook: Primary CTA is a daily prompt — &quot;What are you wearing today?&quot; Users snap a photo; the app extracts, auto-tags, and saves the garments.
+Outfit Generation: Users input a single variable: Occasion. Local weather is fetched automatically via API.
+
+3.3 Graceful Degradation (Sparse Wardrobe State)
+Partial Style Mode: If the database returns fewer than 3 valid items for a given filter, the app anchors on available items and provides a partial recommendation: &quot;Great foundation. To complete the Chowa harmony, we recommend adding a [Category] in [OKLCH Color Range] — like a dark navy trouser.&quot;
+
+4. System Architecture: The Two-Stage Engine
+The recommendation system is strictly decoupled into two independent pipelines to ensure scalability and debuggability.
+
+Stage 1: Occasion &amp; Context Filter (Rule-Based Boolean)
+A strict gateway that narrows the database query to acceptable candidates.
+Occasion (e.g., Office, Date Night), Local Weather API: Inputs
+Boolean filtering. If Occasion = &quot;Corporate&quot; and Weather = &quot;Cold&quot;, items tagged Category: Shorts or Season: Summer are assigned false and dropped from the candidate pool: Logic
+A valid, context-appropriate subset of the user&apos;s wardrobe: Output
+
+Stage 2: The OKLCH Chowa Ranker (Continuous Math)
+Valid items are passed to the color engine to be scored and ranked.
+All extracted hex codes are converted to OKLCH (Lightness, Chroma, Hue) to ensure perceptually uniform mathematical distances: Color Space
+For multi-item top categories (e.g., shirt under jacket), the outermost layer takes strict precedence. Inner layers are ignored to prevent composite muddiness: Layering Resolution
+The top 3 mathematically harmonious outfits, presented visually with a tooltip explaining the color relationship (see Appendix A): Output
+
+5. Data Ingestion &amp; Human-in-the-Loop Tagging
+Images pass through a background removal service to isolate the garment: Image Processing
+The system identifies Category, Sub-category, and extracts dominant/secondary colors: Vision Extraction
+
+Confidence Thresholds (85% Rule)
+Every auto-tag receives a confidence score from the Vision API. If the score falls below 85%, the system prompts the user for manual validation: &quot;Lighting is tricky here. Is this Navy or Black? [Tap to confirm]&quot; — ensuring clean data for the OKLCH engine.
+
+6. Telemetry &amp; Feedback Schema
+Every generated outfit block must log user interaction events to the database. Without a snapshot of the generation state, rerolls cannot be debugged and the algorithm cannot be tuned.
+
+Database Table: outfit_telemetry_logs
+
+Field
+Type
+Nullable
+Notes
+log_id
+UUID
+No
+Primary key
+user_id
+UUID
+No
+Foreign key to users
+generated_at
+Timestamp
+No
+UTC generation time
+event_type
+Enum
+No
+ACCEPTED / REROLLED / MANUAL_EDIT
+outfit_seed
+JSON
+No
+{top_id, bottom_id, shoes_id}
+item_swapped_id
+UUID
+Yes
+Only on MANUAL_EDIT
+chowa_scores_snapshot
+JSON
+No
+{S_raw, multipliers_applied, final_score, D_TB, D_BS, D_TS}
+
+Event Types:
+ACCEPTED — User saved or selected the outfit
+REROLLED — User swiped or tapped for a new generation
+MANUAL_EDIT — User swapped a specific item (highest signal: indicates exactly where the algorithm diverged from user intuition)
+
+7. Technical Stack
+React Native — unified iOS/Android codebase, pairs well with Python backends: Frontend
+Python with FastAPI — performant routing, native support for colormath and ML processing: Backend API &amp; Logic
+PostgreSQL — relational mapping of users, wardrobe items, tags, and telemetry logs: Database
+Self-hosted rembg (Python) — controls unit economics by avoiding expensive per-call commercial APIs: Image Processing
+AWS S3 or Google Cloud Storage: Image Storage
+
+8. Out of Scope for MVP (V2 Features)
+&quot;Vibe&quot; Input — cut until user telemetry data defines what this means mechanically
+Calendar Integrations — deferred to preserve core algorithm engineering bandwidth
+Mass Wardrobe Import — workflows designed to ingest 50+ items at once
+Social Sharing — exporting outfit grids to external platforms
+
+Appendix A: Algorithm Spec — The Chowa Ranker
+This section defines the complete, implementable mathematics for the backend Stage 2 engine.
+
+A. Pairwise OKLCH Distance Calculation
+The engine calculates perceptual distance between items in OKLCH space. Because Hue (h) is a circular angle (0–360°), the shortest arc must be used to handle wraparound (e.g., 350° and 10° are 20° apart, not 340°):
+
+Δh_arc = min(|Δh|, 360 − |Δh|)
+Circular hue arc — handles wraparound
+
+The pairwise distance formula:
+
+D = √(ΔL² + ΔC² + Δh_arc²)
+Perceptual OKLCH distance
+
+An outfit requires three weighted pairwise calculations:
+D_TB (Top to Bottom) — Weight: 50%
+D_BS (Bottom to Shoes) — Weight: 30%
+D_TS (Top to Shoes) — Weight: 20%
+
+B. The Composite Score Formula (S_raw)
+Lower distance D means higher perceptual similarity. We use a normalized inverse function f(D) to convert distance to a harmony score:
+
+f(D) = 1 − min(D, 1)
+Inverse distance — bounded to [0, 1]
+
+The raw harmony score as a percentage out of 100:
+
+S_raw = (0.5 · f(D_TB) + 0.3 · f(D_BS) + 0.2 · f(D_TS)) × 100
+Weighted composite score
+
+C. Pass/Fail Thresholds &amp; Clash Penalties
+D &lt; 0.05 — colors are very close, sharing lightness and chroma: Tonal Match
+Hue angular distance ≈ 180° (±15°), with balanced Lightness/Chroma: Complementary Match
+0.05 &lt; D &lt; 0.15 — too similar to contrast, too different to be tonal: Clash Zone (Uncanny Valley)
+
+Clash Penalty: If any pairwise distance falls in the clash zone (0.05 &lt; D &lt; 0.15), apply clash_modifier = 0.5× to S_raw.
+
+D. The Chowa Profile Multipliers
+The onboarding quiz output dictates how final scores are scaled. Multipliers are applied alongside any applicable clash penalties, not instead of them.
+
+If all pairwise distances score as a Tonal Match (D &lt; 0.05 for D_TB, D_BS, and D_TS), apply 1.5× multiplier: Tonal Minimalist
+If either D_TB OR D_BS satisfies the Complementary Match threshold (hue arc ≈ 180° ±15°), apply 1.5× multiplier: High-Contrast
+If exactly one item has Chroma &gt; 0.1 and all others have Chroma &lt; 0.02 (achromatic), apply 1.5× multiplier: Neutral-Anchored (Hai-iro)
+
+E. Composite Modifier Logic &amp; Query Output
+Penalties and profile multipliers are applied sequentially. There is no override — both can apply simultaneously:
+
+final_score = S_raw × clash_modifier × profile_multiplier
+clash_modifier defaults to 1.0 (0.5 if clash triggered)  ·  profile_multiplier defaults to 1.0 (1.5 if profile condition met)
+
+All four possible modifier states:
+
+clash_modifier
+profile_multiplier
+Net Effect
+Description
+1.0
+1.0
+1.0×
+Neutral — scores as-is
+0.5
+1.0
+0.5×
+Penalised clash, no profile boost
+1.0
+1.5
+1.5×
+Profile-boosted harmony, no clash
+0.5
+1.5
+0.75×
+Clash present but profile conditions met — monitor via telemetry
+
+⚠  Monitor the 0.75× case
+An outfit with clash_modifier=0.5 AND profile_multiplier=1.5 resolves to 0.75× net — it may outrank a clean neutral outfit. Filter the telemetry for this combination and check ACCEPT vs REROLL rates. If users consistently reroll these, strengthen the clash penalty to 0.3× when a profile multiplier is also active.
+
+The backend calculates final_score for all valid combinations, sorts descending, and returns LIMIT 3 to the frontend.

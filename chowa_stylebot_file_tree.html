@@ -1,0 +1,187 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-mono, monospace); }
+  .tree { padding: 16px 0; font-size: 13px; line-height: 1.7; color: var(--color-text-primary); }
+  .tree-section { margin-bottom: 4px; }
+  .row { display: flex; align-items: baseline; gap: 6px; padding: 1px 0; white-space: nowrap; }
+  .indent-1 { padding-left: 20px; }
+  .indent-2 { padding-left: 40px; }
+  .indent-3 { padding-left: 60px; }
+  .indent-4 { padding-left: 80px; }
+  .name { color: var(--color-text-primary); font-weight: 500; }
+  .dir { color: var(--color-text-primary); font-weight: 500; }
+  .guide { color: var(--color-text-tertiary); user-select: none; }
+  .tag {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 7px;
+    border-radius: 999px;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+  .tag-tech   { background: #E6F1FB; color: #185FA5; }
+  .tag-screen { background: #EAF3DE; color: #3B6D11; }
+  .tag-comp   { background: #EEEDFE; color: #3C3489; }
+  .tag-hook   { background: #FAEEDA; color: #854F0B; }
+  .tag-svc    { background: #E1F5EE; color: #0F6E56; }
+  .tag-store  { background: #FAECE7; color: #993C1D; }
+  .tag-api    { background: #FBEAF0; color: #993556; }
+  .tag-engine { background: #EAF3DE; color: #27500A; }
+  .tag-ingest { background: #FAEEDA; color: #633806; }
+  .tag-model  { background: #E6F1FB; color: #0C447C; }
+  .tag-db     { background: #F1EFE8; color: #444441; }
+  .tag-test   { background: #FCEBEB; color: #A32D2D; }
+  .tag-new    { background: #BAF7D0; color: #166534; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0 4px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-tertiary);
+    border-top: 1px solid var(--color-border-tertiary);
+    margin-top: 6px;
+  }
+  .section-header:first-child { border-top: none; padding-top: 0; }
+  @media (prefers-color-scheme: dark) {
+    .tag-tech   { background: #042C53; color: #B5D4F4; }
+    .tag-screen { background: #173404; color: #C0DD97; }
+    .tag-comp   { background: #26215C; color: #CECBF6; }
+    .tag-hook   { background: #412402; color: #FAC775; }
+    .tag-svc    { background: #04342C; color: #9FE1CB; }
+    .tag-store  { background: #4A1B0C; color: #F5C4B3; }
+    .tag-api    { background: #4B1528; color: #F4C0D1; }
+    .tag-engine { background: #173404; color: #97C459; }
+    .tag-ingest { background: #412402; color: #EF9F27; }
+    .tag-model  { background: #042C53; color: #85B7EB; }
+    .tag-db     { background: #2C2C2A; color: #B4B2A9; }
+    .tag-test   { background: #501313; color: #F7C1C1; }
+    .tag-new    { background: #14532d; color: #86efac; }
+  }
+</style>
+
+<div class="tree">
+
+  <div class="section-header">📁 chowa-stylebot/</div>
+
+  <!-- MOBILE -->
+  <div class="section-header">📱 mobile/ <span class="tag tag-tech">React Native</span></div>
+
+  <div class="row indent-1"><span class="guide">└─</span><span class="dir">src/</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">screens/</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">OnboardingScreen.tsx</span><span class="tag tag-screen">quiz + seed</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">DailyCheckInScreen.tsx</span><span class="tag tag-screen">daily hook CTA</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">OutfitResultScreen.tsx</span><span class="tag tag-screen">top-3 outfits</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">WardrobeScreen.tsx</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">ItemDetailScreen.tsx</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">components/</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">OutfitCard.tsx</span><span class="tag tag-comp">score + tooltip</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">GarmentCapture.tsx</span><span class="tag tag-comp">camera + upload</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">OccasionPicker.tsx</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">ColorSwatch.tsx</span><span class="tag tag-comp">OKLCH preview</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">TagConfirmModal.tsx</span><span class="tag tag-comp">85% threshold UI</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">PartialStyleBanner.tsx</span><span class="tag tag-comp">graceful degrade</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">hooks/</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">useOutfitGeneration.ts</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">useWardrobeCapture.ts</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">useTelemetry.ts</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">services/</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">api.ts</span><span class="tag tag-svc">FastAPI client</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">weatherApi.ts</span><span class="tag tag-svc">location weather</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">store/</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">wardrobeStore.ts</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">profileStore.ts</span><span class="tag tag-store">Chowa profile</span></div>
+
+  <div class="row indent-2"><span class="guide">└─</span><span class="name">App.tsx</span></div>
+
+  <!-- UI COMPONENTS — NEW -->
+  <div class="section-header">🎨 ui/ <span class="tag tag-new">new · from Stitch export</span></div>
+
+  <div class="row indent-1"><span class="guide">└─</span><span class="dir">stitch_chowa_stylebot_ui_components/</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">onboarding_the_quiz/</span><span class="tag tag-screen">OnboardingScreen</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">code.html</span><span class="tag tag-new">UI source</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">screen.png</span><span class="tag tag-new">design preview</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">daily_check_in/</span><span class="tag tag-screen">DailyCheckInScreen</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">code.html</span><span class="tag tag-new">UI source</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">screen.png</span><span class="tag tag-new">design preview</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">outfit_results/</span><span class="tag tag-screen">OutfitResultScreen</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">code.html</span><span class="tag tag-new">UI source</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">screen.png</span><span class="tag tag-new">design preview</span></div>
+
+  <div class="row indent-2"><span class="guide">└─</span><span class="dir">chowa_editorial/</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">DESIGN.md</span><span class="tag tag-new">design system</span></div>
+
+  <!-- BACKEND -->
+  <div class="section-header">⚙️ backend/ <span class="tag tag-tech">Python · FastAPI</span></div>
+
+  <div class="row indent-1"><span class="guide">└─</span><span class="dir">app/</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">api/</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">routes_outfit.py</span><span class="tag tag-api">POST /generate</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">routes_wardrobe.py</span><span class="tag tag-api">CRUD garments</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">routes_onboarding.py</span><span class="tag tag-api">profile quiz</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">routes_telemetry.py</span><span class="tag tag-api">log events</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">engine/</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">occasion_filter.py</span><span class="tag tag-engine">Stage 1: boolean</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">chowa_ranker.py</span><span class="tag tag-engine">Stage 2: OKLCH math</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">oklch_utils.py</span><span class="tag tag-engine">hex→OKLCH, Δh arc</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">scoring.py</span><span class="tag tag-engine">S_raw + modifiers</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">profile_multipliers.py</span><span class="tag tag-engine">tonal/contrast/neutral</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">ingestion/</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">vision_extractor.py</span><span class="tag tag-ingest">category + color tags</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">bg_remover.py</span><span class="tag tag-ingest">rembg wrapper</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">confidence_gate.py</span><span class="tag tag-ingest">85% threshold logic</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">storage.py</span><span class="tag tag-ingest">S3/GCS upload</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="dir">models/</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">garment.py</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">outfit.py</span></div>
+  <div class="row indent-3"><span class="guide">├─</span><span class="name">telemetry.py</span><span class="tag tag-model">log schema</span></div>
+  <div class="row indent-3"><span class="guide">└─</span><span class="name">user_profile.py</span></div>
+
+  <div class="row indent-2"><span class="guide">├─</span><span class="name">main.py</span></div>
+  <div class="row indent-2"><span class="guide">├─</span><span class="name">config.py</span><span class="tag tag-model">env vars</span></div>
+  <div class="row indent-2"><span class="guide">└─</span><span class="name">deps.py</span><span class="tag tag-model">DB session, auth</span></div>
+
+  <!-- DB -->
+  <div class="section-header">🗄️ db/ <span class="tag tag-db">PostgreSQL</span></div>
+
+  <div class="row indent-1"><span class="guide">├─</span><span class="dir">migrations/</span></div>
+  <div class="row indent-2"><span class="guide">├─</span><span class="name">001_users.sql</span></div>
+  <div class="row indent-2"><span class="guide">├─</span><span class="name">002_garments.sql</span></div>
+  <div class="row indent-2"><span class="guide">├─</span><span class="name">003_outfits.sql</span></div>
+  <div class="row indent-2"><span class="guide">└─</span><span class="name">004_telemetry_logs.sql</span><span class="tag tag-db">outfit_telemetry_logs</span></div>
+  <div class="row indent-1"><span class="guide">├─</span><span class="name">schema.sql</span><span class="tag tag-db">full DDL</span></div>
+  <div class="row indent-1"><span class="guide">└─</span><span class="name">seed.sql</span><span class="tag tag-db">test data</span></div>
+
+  <!-- TESTS -->
+  <div class="section-header">🧪 tests/</div>
+  <div class="row indent-1"><span class="guide">├─</span><span class="name">test_oklch_utils.py</span><span class="tag tag-test">math correctness</span></div>
+  <div class="row indent-1"><span class="guide">├─</span><span class="name">test_chowa_ranker.py</span><span class="tag tag-test">modifier matrix</span></div>
+  <div class="row indent-1"><span class="guide">├─</span><span class="name">test_occasion_filter.py</span></div>
+  <div class="row indent-1"><span class="guide">└─</span><span class="name">test_telemetry.py</span></div>
+
+  <!-- ROOT -->
+  <div class="section-header">📄 root</div>
+  <div class="row indent-1"><span class="guide">├─</span><span class="name">docker-compose.yml</span><span class="tag tag-db">backend + postgres</span></div>
+  <div class="row indent-1"><span class="guide">├─</span><span class="name">.env.example</span><span class="tag tag-svc">weather key, S3 creds</span></div>
+  <div class="row indent-1"><span class="guide">├─</span><span class="name">requirements.txt</span></div>
+  <div class="row indent-1"><span class="guide">└─</span><span class="name">README.md</span></div>
+
+</div>
