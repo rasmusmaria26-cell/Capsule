@@ -21,12 +21,14 @@ class Settings(BaseSettings):
     s3_bucket: str = ""
     gcs_bucket: str = ""
 
-    # Google Cloud Vision
+    # Google Cloud Vision / Gemini Settings
     google_application_credentials: str = ""
+    gemini_api_key: str = ""
 
     model_config = {
         "env_file": ".env",
-        "env_file_encoding": "utf-8"
+        "env_file_encoding": "utf-8",
+        "extra": "ignore"
     }
 
 

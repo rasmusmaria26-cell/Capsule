@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS garments (
     thumbnail_url   TEXT,
     confidence      FLOAT       NOT NULL DEFAULT 1.0,  -- Vision API confidence
     is_confirmed    BOOLEAN     NOT NULL DEFAULT FALSE, -- human-confirmed tag
-
+    all_labels      JSONB       DEFAULT '[]'::jsonb,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

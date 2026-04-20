@@ -1,0 +1,12 @@
+venv
+.venv
+__pycache__
+*.pyc
+node_modules
+mobile/node_modules
+.git
+.pytest_cache
+debug_error.log
+test_env.py
+backend/venv
+backend/__pycache__

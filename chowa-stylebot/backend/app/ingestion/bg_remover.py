@@ -13,7 +13,7 @@ except (ImportError, SystemExit):
     _session = None
 
 
-async def remove_background_cmd(image_bytes: bytes) -> bytes:
+async def remove_background(image_bytes: bytes) -> bytes:
     """
     Strip background from an image using rembg.
     Runs synchronously in the current thread. Use run_in_executor for production to avoid blocking the event loop.

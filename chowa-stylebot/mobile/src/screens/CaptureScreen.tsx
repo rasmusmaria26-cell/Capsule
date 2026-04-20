@@ -27,23 +27,33 @@ export default function CaptureScreen() {
         setUploading(true);
         try {
             const formData = new FormData();
-            formData.append('file', {
-                uri,
-                name: 'garment.jpg',
-                type: 'image/jpeg',
-            } as any);
+
+            // Web compatibility fix: URI needs to be converted to a blob
+            if (uri.startsWith('data:') || uri.startsWith('blob:') || uri.startsWith('http')) {
+                const response = await fetch(uri);
+                const blob = await response.blob();
+                formData.append('file', blob, 'garment.jpg');
+            } else {
+                formData.append('file', {
+                    uri,
+                    name: 'garment.jpg',
+                    type: 'image/jpeg',
+                } as any);
+            }
 
             const res = await api.wardrobe.upload(formData);
-            addGarment(res.data.garment);
+
+            // Loop through all individually extracted items
+            res.data.items.forEach((item: any) => addGarment(item));
 
             if (res.data.needs_review) {
                 Alert.alert(
                     'Review needed',
-                    "We're not 100% sure about this item. Tap to confirm the details.",
+                    "We're not 100% sure about some of the items in this photo. Tap to confirm the details.",
                     [{ text: 'Review', onPress: () => navigation.goBack() }]
                 );
             } else {
-                Alert.alert('Added!', 'Garment added to your wardrobe.', [
+                Alert.alert('Added!', `${res.data.items.length} garment(s) added to your wardrobe.`, [
                     { text: 'Done', onPress: () => navigation.goBack() },
                     { text: 'Add another' },
                 ]);

@@ -7,6 +7,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { Colors, Typography, Spacing } from '../theme/tokens';
 import { useProfileStore } from '../store/profileStore';
+import { api } from '../services/api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 
@@ -17,10 +18,12 @@ export default function AuthScreen({ navigation }: Props) {
     const handleGoogleSignIn = async () => {
         setLoading(true);
         try {
-            // TODO Phase 5: Wire up real Google OAuth / Supabase Auth
-            // For now, simulate a successful login for development
-            await new Promise((r) => setTimeout(r, 800));
-            setAuth('dev-user-001', 'dev-token-xyz', 'dev@chowa.app');
+            // Phase 5: Wire up real JWT Authentication
+            const res = await api.auth.login('chowa-test-user-001');
+            setAuth('chowa-test-user-001', res.data.access_token, 'dev@chowa.app');
+        } catch (err) {
+            console.error("Login failed:", err);
+            alert("Could not connect to the backend. Is uvicorn running?");
         } finally {
             setLoading(false);
         }

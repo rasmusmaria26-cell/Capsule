@@ -49,6 +49,7 @@ function MainTabs() {
                     paddingTop: 8,
                     height: 64,
                 },
+                tabBarItemStyle: { outlineStyle: 'none' } as any,
                 tabBarActiveTintColor: Colors.accent,
                 tabBarInactiveTintColor: Colors.textTertiary,
                 tabBarLabelStyle: {

@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import uuid
+import os
+import json
 
 from app.deps import get_db, get_current_user_id
-from app.ingestion.bg_remover import remove_background_async
-from app.ingestion.vision_extractor import extract_garment_tags, VisionExtractionError
+from app.ingestion.bg_remover import remove_background
+from app.ingestion.vision_extractor import extract_garment_data, VisionExtractionError
 from app.ingestion.confidence_gate import evaluate_confidence
 from app.ingestion.storage import upload_image, StorageError
 from app.engine.oklch_utils import hex_to_oklch
@@ -14,93 +16,75 @@ router = APIRouter()
 
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_wardrobe_item(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id)
 ):
-    """
-    Phase 2 Image Ingestion Pipeline
-    1. Receive image
-    2. Remove background in worker thread
-    3. Upload processed image to S3 (async)
-    4. Call Vision API for tags/colors
-    5. Evaluate 85% confidence gate
-    6. Convert hex to OKLCH & persist to DB
-    """
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
+    """POST /wardrobe/upload — Handle image ingestion with background removal and Vision tagging."""
     try:
-        # Read file bytes
-        raw_image = await file.read()
-        
         # 1. Background Removal
-        processed_image = await remove_background_async(raw_image)
+        image_bytes = await file.read()
+        no_bg_image = await remove_background(image_bytes)
         
-        # 2. Parallel: Upload to Storage & Extract Tags
-        import asyncio
-        upload_task = upload_image(processed_image, user_id, "png")
-        vision_task = extract_garment_tags(processed_image) # send bg-removed image to vision
+        # 2. Vision API Extraction
+        extracted_garments = await extract_garment_data(no_bg_image)
         
-        image_url, vision_result = await asyncio.gather(upload_task, vision_task)
+        # 3. Storage (Cloud)
+        image_url = await upload_image(no_bg_image, user_id)
         
-        # 3. Evaluate Confidence Gate
-        gate_result = evaluate_confidence(vision_result)
+        results = []
+        needs_review = False
         
-        # 4. OKLCH Conversion (for the engine)
-        l, c, h = hex_to_oklch(vision_result.dominant_color.hex_code)
-        secondary_hex = vision_result.secondary_color.hex_code if vision_result.secondary_color else None
-
-        # 5. Persist to DB using raw SQL (matching schema perfectly)
-        garment_id = str(uuid.uuid4())
-        
-        insert_query = text("""
-            INSERT INTO garments (
-                garment_id, user_id, category, sub_category, 
-                dominant_hex, secondary_hex, 
-                oklch_l, oklch_c, oklch_h, 
-                image_url, confidence, is_confirmed
-            ) VALUES (
-                :garment_id, :user_id, :category, :sub_category,
-                :dominant_hex, :secondary_hex,
-                :l, :c, :h,
-                :image_url, :confidence, :is_confirmed
-            ) RETURNING garment_id
-        """)
-        
-        db.execute(insert_query, {
-            "garment_id": garment_id,
-            "user_id": user_id,
-            "category": vision_result.category,
-            "sub_category": vision_result.sub_category,
-            "dominant_hex": vision_result.dominant_color.hex_code,
-            "secondary_hex": secondary_hex,
-            "l": l,
-            "c": c,
-            "h": h,
-            "image_url": image_url,
-            "confidence": vision_result.confidence,
-            "is_confirmed": gate_result.is_confirmed
-        })
+        for garment_data in extracted_garments:
+            # 4. Confidence Gate (85%)
+            gate_result = evaluate_confidence(garment_data)
+            is_confirmed = gate_result.is_confirmed
+            if not is_confirmed:
+                needs_review = True
+            
+            # 5. OKLCH Conversion
+            l_val, c_val, h_val = hex_to_oklch(garment_data.dominant_color.hex_code)
+            
+            # 6. Database Record
+            garment_id = str(uuid.uuid4())
+            db.execute(text("""
+                INSERT INTO garments (garment_id, user_id, category, sub_category, dominant_hex,
+                                     oklch_l, oklch_c, oklch_h, image_url, is_confirmed,
+                                     confidence, all_labels)
+                VALUES (:id, :uid, :cat, :sub, :hex, :l, :c, :h, :url, :conf, :conf_val, :lbls)
+            """), {
+                "id": garment_id, "uid": user_id, "cat": garment_data.category,
+                "sub": garment_data.sub_category, "hex": garment_data.dominant_color.hex_code,
+                "l": l_val, "c": c_val, "h": h_val, "url": image_url, "conf": is_confirmed,
+                "conf_val": garment_data.confidence, "lbls": json.dumps(garment_data.all_labels)
+            })
+            
+            results.append({
+                "garment_id": garment_id,
+                "category": garment_data.category,
+                "sub_category": garment_data.sub_category,
+                "dominant_hex": garment_data.dominant_color.hex_code,
+                "image_url": image_url,
+                "is_confirmed": is_confirmed
+            })
+            
         db.commit()
         
-        # Return DB record representation + gate flags for UI
         return {
-            "garment_id": garment_id,
-            "category": vision_result.category,
-            "sub_category": vision_result.sub_category,
-            "dominant_color": vision_result.dominant_color.hex_code,
-            "secondary_color": secondary_hex,
-            "image_url": image_url,
-            "needs_manual_review": gate_result.requires_manual_check,
-            "review_reason": gate_result.reason
+            "items": results,
+            "needs_review": needs_review
         }
-        
+
     except VisionExtractionError as e:
         raise HTTPException(status_code=502, detail=f"Vision API Error: {str(e)}")
     except StorageError as e:
         raise HTTPException(status_code=502, detail=f"Storage Error: {str(e)}")
     except Exception as e:
+        import traceback
+        print("=== UPLOAD 500 TRACEBACK ===")
+        traceback.print_exc()
+        print("=== END TRACEBACK ===")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -111,9 +95,38 @@ def list_garments(
     user_id: str = Depends(get_current_user_id),
 ):
     """GET /wardrobe/ — list user's garments."""
-    items = db.execute(text("""
-        SELECT garment_id, category, sub_category, dominant_hex, image_url, is_confirmed 
-        FROM garments WHERE user_id = :uid ORDER BY created_at DESC
-    """), {"uid": user_id}).mappings().fetchall()
-    
-    return {"items": [dict(r) for r in items]}
+    try:
+        items = db.execute(text("""
+            SELECT garment_id, category, sub_category, dominant_hex, image_url, is_confirmed 
+            FROM garments WHERE user_id = :uid ORDER BY created_at DESC
+        """), {"uid": user_id}).mappings().fetchall()
+        
+        return {"items": [dict(r) for r in items]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{garment_id}")
+def get_garment(
+    garment_id: str,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """GET /wardrobe/{garment_id} — fetch a single garment for the ItemDetail screen."""
+    try:
+        row = db.execute(text("""
+            SELECT garment_id, user_id, category, sub_category, occasion_tags, season_tags,
+                   dominant_hex, oklch_l, oklch_c, oklch_h, image_url, is_confirmed,
+                   confidence, all_labels, created_at
+            FROM garments
+            WHERE garment_id = :gid AND user_id = :uid
+        """), {"gid": garment_id, "uid": user_id}).mappings().fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Garment not found")
+
+        return {"garment": dict(row)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

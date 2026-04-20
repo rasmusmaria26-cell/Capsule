@@ -12,6 +12,7 @@ export interface Garment {
     image_url: string | null;
     is_confirmed: boolean;
     confidence: number | null;
+    all_labels?: string[];
 }
 
 export interface GeneratedOutfit {

@@ -1,6 +1,6 @@
 import uuid
 import json
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -20,6 +20,7 @@ class GenerateRequest(BaseModel):
 
 @router.post("/generate", status_code=status.HTTP_200_OK)
 def generate_outfits(
+    request: Request,
     req: GenerateRequest,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id)
@@ -146,11 +147,13 @@ def generate_outfits(
         # Insert Outfit record
         db.execute(text("""
             INSERT INTO outfits (
-                outfit_id, user_id, top_id, bottom_id, shoe_id, 
-                occasion, weather_context, final_score
+                outfit_id, user_id, top_id, bottom_id, shoes_id, 
+                occasion, weather_desc, final_score,
+                s_raw, clash_modifier, profile_multiplier, d_tb, d_bs, d_ts
             ) VALUES (
                 :oid, :uid, :tid, :bid, :sid,
-                :occ, :wea, :score
+                :occ, :wea, :score,
+                :s_raw, :clash_mod, :prof_mult, :d_tb, :d_bs, :d_ts
             )
         """), {
             "oid": outfit_id,
@@ -160,23 +163,13 @@ def generate_outfits(
             "sid": shoe_id,
             "occ": req.occasion,
             "wea": req.weather,
-            "score": outfit["final_score"]
-        })
-        
-        # Insert Telemetry Log (for Phase 5 tuning)
-        db.execute(text("""
-            INSERT INTO outfit_telemetry_logs (
-                log_id, outfit_id, user_id, 
-                algorithm_version, score_snapshot
-            ) VALUES (
-                :lid, :oid, :uid,
-                'v1.0', :snapshot
-            )
-        """), {
-            "lid": str(uuid.uuid4()),
-            "oid": outfit_id,
-            "uid": user_id,
-            "snapshot": json.dumps(outfit["score_details"])  # GIN indexable JSONB
+            "score": outfit["final_score"],
+            "s_raw": outfit["score_details"]["s_raw"],
+            "clash_mod": outfit["score_details"]["clash_modifier"],
+            "prof_mult": outfit["score_details"]["profile_multiplier"],
+            "d_tb": outfit["score_details"]["d_tb"],
+            "d_bs": outfit["score_details"]["d_bs"],
+            "d_ts": outfit["score_details"]["d_ts"]
         })
         
         # Format response for the UI

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import {
   useFonts,
   Manrope_400Regular,
@@ -11,6 +11,15 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import Navigation from './src/navigation';
 import { Colors } from './src/theme/tokens';
+
+if (Platform.OS === 'web') {
+  const style = document.createElement('style');
+  style.textContent = `
+        *:focus { outline: none !important; }
+        a:focus { outline: none !important; }
+    `;
+  document.head.append(style);
+}
 
 export default function App() {
   const [fontsLoaded] = useFonts({

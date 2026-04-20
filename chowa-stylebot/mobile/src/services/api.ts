@@ -3,7 +3,7 @@ import { useProfileStore } from '../store/profileStore';
 
 // ── Config ─────────────────────────────────────────────────────────────────
 // Update this to your local IP when running the FastAPI server locally
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.100:8000';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8000';
 
 const client = axios.create({
     baseURL: BASE_URL,
@@ -20,6 +20,17 @@ client.interceptors.request.use((config) => {
 
 // ── Onboarding ─────────────────────────────────────────────────────────────
 export const api = {
+    auth: {
+        login: (username: string) => {
+            const params = new URLSearchParams();
+            params.append('username', username);
+            params.append('password', 'dummy-pass-for-mvp');
+            return client.post('/auth/token', params.toString(), {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            });
+        }
+    },
+
     onboarding: {
         submitProfile: (profile: string) =>
             client.post('/onboarding/profile', { chowa_profile: profile }),

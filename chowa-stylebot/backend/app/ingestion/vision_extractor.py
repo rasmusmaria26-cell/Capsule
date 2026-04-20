@@ -1,18 +1,17 @@
 import json
+import asyncio
 from base64 import b64encode
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Literal
 
-import httpx
+from pydantic import BaseModel, Field
 from app.config import settings
-
 
 @dataclass
 class ExtractedColor:
     hex_code: str
     score: float      # Prominence score from Vision API
     pixel_fraction: float
-
 
 @dataclass
 class VisionExtractionResult:
@@ -23,152 +22,124 @@ class VisionExtractionResult:
     secondary_color: Optional[ExtractedColor]
     all_labels: list[str]
 
-
 class VisionExtractionError(Exception):
     pass
 
+# We define Pydantic schemas over dataclasses here just for Gemini Structured Outputs
+class PydanticExtractedColor(BaseModel):
+    hex_code: str = Field(description="Hex color code, e.g. #FFFFFF or #1C2B4A")
+    score: float = Field(description="Prominence score between 0.0 and 1.0")
+    pixel_fraction: float = Field(description="Estimated fraction of the item covered by this color (0.0 to 1.0)")
 
-async def extract_garment_tags(image_bytes: bytes) -> VisionExtractionResult:
+class PydanticGarment(BaseModel):
+    category: Literal["Top", "Bottom", "Shoes", "Outerwear", "Accessory", "Dress", "One-Piece"]
+    sub_category: str | None = Field(
+        description="A rich semantic description of the clothing piece. e.g., 'Black Utility Jacket' or 'Off-White Oxford Shirt'."
+    )
+    confidence: float = Field(description="Overall confidence in this identification (0.0 to 1.0).")
+    dominant_color: PydanticExtractedColor
+    secondary_color: PydanticExtractedColor | None = Field(default=None)
+    all_labels: list[str] = Field(
+        description="A detailed list of tags. e.g., 'cotton', 'buttons', 'baggy', 'streetwear'."
+    )
+
+class PydanticVisionResult(BaseModel):
+    items: list[PydanticGarment] = Field(
+        description="List of DISTINCT clothing items found in the image. If the person is wearing a full outfit, you MUST return separate objects for their jacket, their shirt, their pants, and their shoes."
+    )
+
+async def extract_garment_data(image_bytes: bytes) -> list[VisionExtractionResult]:
     """
-    Call Google Cloud Vision API to extract category tags and dominant colors.
+    Call Google Gemini 2.5 Flash to perform advanced multimodal layer detection and extraction.
     """
-    api_key = getattr(settings, "google_api_key", "")
-    creds = settings.google_application_credentials
-    
-    # For local dev without creds (or with example placeholders), return a mock response
-    has_no_creds = not creds or "/path/to/" in creds
-    has_no_api_key = not api_key or api_key == "MOCK"
-    
-    if has_no_creds and has_no_api_key:
+    if not settings.gemini_api_key:
         return _mock_extraction()
 
-    url = f"https://vision.googleapis.com/v1/images:annotate?key={api_key}"
+    try:
+        from google import genai
+        from google.genai import types
 
-    payload = {
-        "requests": [
-            {
-                "image": {"content": b64encode(image_bytes).decode("utf-8")},
-                "features": [
-                    {"type": "LABEL_DETECTION", "maxResults": 10},
-                    {"type": "IMAGE_PROPERTIES", "maxResults": 5}
-                ]
-            }
-        ]
-    }
+        client = genai.Client(api_key=settings.gemini_api_key)
+        
+        loop = asyncio.get_running_loop()
+        
+        def _call_gemini():
+            prompt = (
+                "You are an expert AI fashion stylist. Analyze the provided image of clothing. "
+                "The image will have its background removed. "
+                "Look closely at the image. If the image depicts an ENTIRE outfit or multiple layered items (e.g., a jacket worn over a shirt, with pants and shoes), "
+                "you MUST separate them into individual items in the `items` array. Never combine a shirt and a jacket into one item. "
+                "For EACH distinct item, determine its category, sub_category, and colors accurately."
+            )
+            
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=[
+                    types.Part.from_bytes(
+                        data=image_bytes,
+                        mime_type='image/png',
+                    ),
+                    prompt
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=PydanticVisionResult,
+                    temperature=0.1,
+                ),
+            )
+            return response.text
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
-        except httpx.HTTPError as e:
-            raise VisionExtractionError(f"Vision API call failed: {str(e)}")
+        response_text = await loop.run_in_executor(None, _call_gemini)
+        
+        if not response_text:
+            raise VisionExtractionError("Gemini API returned an empty response.")
+            
+        data = json.loads(response_text)
+        
+        def _parse_color(c: dict | None, is_required: bool = False) -> Optional[ExtractedColor]:
+            if not c:
+                return ExtractedColor(hex_code="#000000", score=0.5, pixel_fraction=0.5) if is_required else None
+            return ExtractedColor(
+                hex_code=c.get("hex_code", "#000000"),
+                score=c.get("score", 0.5),
+                pixel_fraction=c.get("pixel_fraction", 0.5)
+            )
 
-    if "responses" not in data or not data["responses"]:
-        raise VisionExtractionError("Empty response from Vision API")
+        results = []
+        for item_data in data.get("items", []):
+            results.append(
+                VisionExtractionResult(
+                    category=item_data["category"],
+                    sub_category=item_data.get("sub_category"),
+                    confidence=item_data.get("confidence", 0.9),
+                    dominant_color=_parse_color(item_data.get("dominant_color"), is_required=True),
+                    secondary_color=_parse_color(item_data.get("secondary_color"), is_required=False),
+                    all_labels=item_data.get("all_labels", [])
+                )
+            )
+        return results
 
-    res = data["responses"][0]
-    if "error" in res:
-        raise VisionExtractionError(f"Vision API returned error: {res['error'].get('message')}")
+    except Exception as e:
+        if isinstance(e, VisionExtractionError):
+            raise e
+        raise VisionExtractionError(f"Gemini API vision extraction failed: {str(e)}")
 
-    return _parse_vision_response(res)
-
-
-def _parse_vision_response(res: dict) -> VisionExtractionResult:
-    # 1. Parse Image Properties (Colors)
-    colors_data = res.get("imagePropertiesAnnotation", {}).get("dominantColors", {}).get("colors", [])
-    if not colors_data:
-        raise VisionExtractionError("No colors detected in image")
-
-    # Sort colors by combined prominence and pixel fraction to find the dominant garment colors
-    # (Background is already removed by rembg, so the remaining colors belong to the garment)
-    sorted_colors = sorted(
-        colors_data,
-        key=lambda c: c.get("score", 0) * c.get("pixelFraction", 0),
-        reverse=True
-    )
-
-    extracted_colors = []
-    for c in sorted_colors[:2]:
-        rgb = c.get("color", {})
-        # Convert RGB dict to hex string
-        r, g, b = int(rgb.get("red", 0)), int(rgb.get("green", 0)), int(rgb.get("blue", 0))
-        hex_code = f"#{r:02X}{g:02X}{b:02X}"
-        extracted_colors.append(ExtractedColor(
-            hex_code=hex_code,
-            score=c.get("score", 0),
-            pixel_fraction=c.get("pixelFraction", 0)
-        ))
-
-    dominant_color = extracted_colors[0]
-    secondary_color = extracted_colors[1] if len(extracted_colors) > 1 else None
-
-    # 2. Parse Labels (Category)
-    labels_data = res.get("labelAnnotations", [])
-    all_labels = [label.get("description", "").lower() for label in labels_data]
-
-    # Simple heuristic to map Vision labels to our rigid Categories
-    # Top / Bottom / Shoes / Outerwear / Accessory
-    category = "Accessory"  # default fallback
-    sub_category = None
-    confidence = 0.5  # default low confidence if we have to guess
-
-    tops = {"shirt", "t-shirt", "top", "blouse", "sweater", "hoodie"}
-    bottoms = {"trousers", "pants", "jeans", "shorts", "skirt"}
-    shoes = {"shoe", "sneaker", "boot", "footwear"}
-    outerwear = {"jacket", "coat", "blazer", "suit"}
-
-    # Find highest confidence matching label
-    for label in labels_data:
-        desc = label.get("description", "").lower()
-        score = label.get("score", 0.0)
-
-        # Look for matching words in the label description
-        words = set(desc.split())
-        if tops.intersection(words):
-            category = "Top"
-            sub_category = desc
-            confidence = score
-            break
-        elif bottoms.intersection(words):
-            category = "Bottom"
-            sub_category = desc
-            confidence = score
-            break
-        elif shoes.intersection(words):
-            category = "Shoes"
-            sub_category = desc
-            confidence = score
-            break
-        elif outerwear.intersection(words):
-            category = "Outerwear"
-            sub_category = desc
-            confidence = score
-            break
-
-    # If we didn't find a strong structural match but got labels, use the top label as sub_category
-    if category == "Accessory" and labels_data:
-        sub_category = labels_data[0].get("description")
-        confidence = labels_data[0].get("score", 0.0) - 0.2  # Penalty for falling back to accessory
-
-    return VisionExtractionResult(
-        category=category,
-        sub_category=sub_category.title() if sub_category else None,
-        confidence=confidence,
-        dominant_color=dominant_color,
-        secondary_color=secondary_color,
-        all_labels=all_labels
-    )
-
-
-def _mock_extraction() -> VisionExtractionResult:
-    """Mock result for local development without GCP credentials."""
-    import asyncio
-    return VisionExtractionResult(
-        category="Top",
-        sub_category="Oxford Shirt",
-        confidence=0.92,
-        dominant_color=ExtractedColor(hex_code="#1C2B4A", score=0.8, pixel_fraction=0.7),
-        secondary_color=ExtractedColor(hex_code="#F2F2F0", score=0.2, pixel_fraction=0.1),
-        all_labels=["shirt", "oxford", "clothing", "sleeve"]
-    )
+def _mock_extraction() -> list[VisionExtractionResult]:
+    return [
+        VisionExtractionResult(
+            category="Outerwear",
+            sub_category="Black Utility Jacket (Mock - API Key Missing)",
+            confidence=0.92,
+            dominant_color=ExtractedColor(hex_code="#1C2B4A", score=0.8, pixel_fraction=0.7),
+            secondary_color=ExtractedColor(hex_code="#F2F2F0", score=0.2, pixel_fraction=0.1),
+            all_labels=["mock", "api", "key", "required"]
+        ),
+        VisionExtractionResult(
+            category="Top",
+            sub_category="White Shirt (Mock - API Key Missing)",
+            confidence=0.85,
+            dominant_color=ExtractedColor(hex_code="#FFFFFF", score=0.9, pixel_fraction=0.9),
+            secondary_color=None,
+            all_labels=["mock", "shirt", "white"]
+        )
+    ]
